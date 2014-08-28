@@ -1,90 +1,68 @@
 #include <OneWire.h>
+#include <EEPROM.h>
 
+
+#define NUM_TS 9
+byte tSensor[9][8];
+int RunOnce = 0;
+int address = 0;
+byte value;
+int i;
+byte addr4[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+
+String MyStringBase = "0x";
+ String MyString0;
 // DS18S20 Temperature chip i/o
-OneWire ds(4);  // on pin 10
+OneWire ow(10);  // on pin 10
+
+
+
+
 
 void setup(void) {
   // initialize inputs/outputs
   // start serial port
-  Serial.begin(9600);
+ Serial.begin(115200);
+ 
 }
 
-void loop(void) {
-   delay(3000);  
-  byte i;
-  byte present = 0;
-  byte data[12];
-  byte addr[8];
 
-  if ( !ds.search(addr)) {
-      Serial.print("No more addresses.\n");
-      ds.reset_search();
-      return;
-  }
 
-  Serial.print("R=");
-  for( i = 0; i < 8; i++) {
-    Serial.print(addr[i], HEX);
-    Serial.print(" ");
-  }
 
-  if ( OneWire::crc8( addr, 7) != addr[7]) {
-      Serial.print("CRC is not valid!\n");
-      return;
-  }
+void loop(void){
+if (RunOnce == 1) { 
+RunOnce = 1;
+for( i = 0; i < 9; i++) {
+  EEPROMwriteBytes(i * 8, addr4, 8);
+       }
+byte addr[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+getDSAddr(addr);
+setTSAddr(1, addr);
+getDSAddr(addr);
+setTSAddr(2, addr);
+getDSAddr(addr);
+setTSAddr(3, addr);
 
-  if ( addr[0] != 0x10) {
-      Serial.print("Device is not a DS18S20 family device.\n");
-      return;
-  }
+}
+EEPROMreadBytes(0, *tSensor, 72);
+for( i = 0; i < 6; i++) {
+float temp;
+float tmp2;
 
-  ds.reset();
-  ds.select(addr);
-  ds.write(0x44,1);         // start conversion, with parasite power on at the end
+if (validAddr(tSensor[i])){
+tmp2 = getTemperature(tSensor[i]);
+temp = c2f(tmp2);
+Serial.print(temp);
+Serial.print(",Sensor");
+Serial.println(i);
+delay(500);
+}
+       }
 
-  delay(1000);     // maybe 750ms is enough, maybe not
-  // we might do a ds.depower() here, but the reset will take care of it.
 
-  present = ds.reset();
-  ds.select(addr);    
-  ds.write(0xBE);         // Read Scratchpad
 
-  Serial.print("P=");
-  Serial.print(present,HEX);
-  Serial.print(" ");
-  for ( i = 0; i < 9; i++) {           // we need 9 bytes
-    data[i] = ds.read();
-    Serial.print(data[i], HEX);
-    Serial.print(" ");
-  }
-  Serial.print(" CRC=");
-  Serial.print( OneWire::crc8( data, 8), HEX);
-  Serial.println();
 
- int HighByte, LowByte, TReading, SignBit, Tc_100, Whole, Fract;
-  LowByte = data[0];
-  HighByte = data[1];
-  TReading = (HighByte << 8) + LowByte;
-  SignBit = TReading & 0x8000;  // test most sig bit
-  if (SignBit) // negative
-  {
-    TReading = (TReading ^ 0xffff) + 1; // 2's comp
-  }
-    Tc_100 = (TReading*100/2);    
 
-float MyTemp = ((float) (Tc_100))/100;
-
-//float MyTemp = ((float) (Fract))/100 + ((float) (Whole));
-
-if (SignBit) // If its negative
-  {
-     MyTemp = MyTemp*-1;
-  }
-
-float aux = (MyTemp * 9 / 5);
-float newTemp = (aux + 32);
-
-Serial.print("newTemp: ");
-Serial.println(newTemp);
 }
 
